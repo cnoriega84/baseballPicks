@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Diamond Oracle JSON</title>
+</head>
+<body>
+<pre id="json">{"status":"loading","message":"Running Diamond Oracle JSON model in browser..."}</pre>
+<script>
+(() => {
+  const MLB_API_BASE = 'https://statsapi.mlb.com/api/v1';
+
+  const TEAM_ABBREV = {
+    108:'LAA',109:'ARI',110:'BAL',111:'BOS',112:'CHC',113:'CIN',114:'CLE',115:'COL',
+    116:'DET',117:'HOU',118:'KC',119:'LAD',120:'WSH',121:'NYM',133:'ATH',134:'PIT',
+    135:'SD',136:'SEA',137:'SF',138:'STL',139:'TB',140:'TEX',141:'TOR',142:'MIN',
+    143:'PHI',144:'ATL',145:'CWS',146:'MIA',147:'NYY',158:'MIL'
+  };
+
+  const LEAGUE = {
+    avg: 0.245,
+    obp: 0.315,
+    slg: 0.395,
+    ops: 0.710,
+    runsPerGame: 4.40,
+    era: 4.20,
+    whip: 1.28,
+    k9: 8.40,
+    bb9: 3.10,
+    hr9: 1.10
+  };
+
+  const GRADE_ORDER = {'A+':12,A:11,'A-':10,'B+':9,B:8,'B-':7,'C+':6,C:5,'C-':4,D:3,F:1};
+  const cache = new Map();
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const round = (value, digits = 2) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Number(n.toFixed(digits)) : null;
+  };
+  const numberFrom = (value, fallback = 0) => {
+    if (value === undefined || value === null || value === '') return fallback;
+    const n = Number(String(value).replace('%',''));
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  function emit(data) {
+    const text = JSON.stringify(data, null, 2);
+    document.title = `Diamond Oracle JSON ${data.date || ''}`.trim();
+    document.body.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.id = 'json';
+    pre.textContent = text;
+    document.body.appendChild(pre);
+
+    const machineReadable = document.createElement('script');
+    machineReadable.id = 'diamondOracleData';
+    machineReadable.type = 'application/json';
+    machineReadable.textContent = text;
+    document.body.appendChild(machineReadable);
+  }
+
+  function todayPacific() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  }
+
+  function selectedDate() {
+    const url = new URL(window.location.href);
+    const date = url.searchParams.get('date');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return date;
+    return todayPacific();
+  }
+
+  function seasonFor(date) {
+    const year = Number(String(date).slice(0, 4));
+    return Number.isFinite(year) ? year : new Date().getFullYear();
+  }
+
+  function teamAbbrev(team = {}) {
+    if (team.abbreviation) return team.abbreviation;
+    if (TEAM_ABBREV[team.id]) return TEAM_ABBREV[team.id];
+    return String(team.name || 'TBD')
+      .split(/\s+/)
+      .map((word) => word[0])
+      .join('')
+      .slice(0, 4)
+      .toUpperCase();
+  }
+
+  async function fetchJson(url, cacheKey = url) {
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const response = await fetch(url, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error(`MLB data request failed ${response.status}: ${url}`);
+    const json = await response.json();
+    cache.set(cacheKey, json);
+    return json;
+  }
+
+  function statFromResponse(json) {
+    return json?.stats?.[0]?.splits?.[0]?.stat || {};
+  }
+
+  async function fetchSchedule(date) {
+    const url = `${MLB_API_BASE}/schedule?sportId=1&date=${encodeURIComponent(date)}&hydrate=team,probablePitcher,venue,linescore`;
+    const json = await fetchJson(url, `schedule:${date}`);
+    return json?.dates?.flatMap((entry) => entry.games || []) || [];
+  }
+
+  async function fetchTeamStats(teamId, season) {
+    const fallback = {
+      hitting: {
+        avg: LEAGUE.avg,
+        obp: LEAGUE.obp,
+        slg: LEAGUE.slg,
+        ops: LEAGUE.ops,
+        runs: 0,
+        games: 0,
+        runsPerGame: LEAGUE.runsPerGame,
+        source: 'fallback'
+      },
+      pitching: {
+        era: LEAGUE.era,
+        whip: LEAGUE.whip,
+        source: 'fallback'
+      }
+    };
+
+    if (!teamId) return fallback;
+
+    const [hittingResult, pitchingResult] = await Promise.allSettled([
+      fetchJson(`${MLB_API_BASE}/teams/${teamId}/stats?stats=season&group=hitting&season=${season}`, `team:${teamId}:hitting:${season}`),
+      fetchJson(`${MLB_API_BASE}/teams/${teamId}/stats?stats=season&group=pitching&season=${season}`, `team:${teamId}:pitching:${season}`)
+    ]);
+
+    const rawHitting = hittingResult.status === 'fulfilled' ? statFromResponse(hittingResult.value) : {};
+    const rawPitching = pitchingResult.status === 'fulfilled' ? statFromResponse(pitchingResult.value) : {};
+    const hittingGames = numberFrom(rawHitting.gamesPlayed, 0);
+
+    return {
+      hitting: {
+        avg: numberFrom(rawHitting.avg, LEAGUE.avg),
+        obp: numberFrom(rawHitting.obp, LEAGUE.obp),
+        slg: numberFrom(rawHitting.slg, LEAGUE.slg),
+        ops: numberFrom(rawHitting.ops, LEAGUE.ops),
+        runs: numberFrom(rawHitting.runs, 0),
+        games: hittingGames,
+        runsPerGame: hittingGames ? numberFrom(rawHitting.runs, 0) / hittingGames : LEAGUE.runsPerGame,
+        source: hittingResult.status === 'fulfilled' ? 'live' : 'fallback'
+      },
+      pitching: {
+        era: numberFrom(rawPitching.era, LEAGUE.era),
+        whip: numberFrom(rawPitching.whip, LEAGUE.whip),
+        source: pitchingResult.status === 'fulfilled' ? 'live' : 'fallback'
+      }
+    };
+  }
+
+  async function fetchPitcherStats(pitcherId, season) {
+    if (!pitcherId) {
+      return {
+        era: LEAGUE.era,
+        whip: LEAGUE.whip,
+        k9: LEAGUE.k9,
+        bb9: LEAGUE.bb9,
+        hr9: LEAGUE.hr9,
+        games: 0,
+        source: 'fallback'
+      };
+    }
+
+    try {
+      const json = await fetchJson(`${MLB_API_BASE}/people/${pitcherId}/stats?stats=season&group=pitching&season=${season}`, `pitcher:${pitcherId}:${season}`);
+      const raw = statFromResponse(json);
+      return {
+        era: numberFrom(raw.era, LEAGUE.era),
+        whip: numberFrom(raw.whip, LEAGUE.whip),
+        k9: numberFrom(raw.strikeoutsPer9Inn, LEAGUE.k9),
+        bb9: numberFrom(raw.walksPer9Inn, LEAGUE.bb9),
+        hr9: numberFrom(raw.homeRunsPer9, LEAGUE.hr9),
+        games: numberFrom(raw.gamesPlayed, 0),
+        source: raw?.era ? 'live' : 'fallback'
+      };
+    } catch {
+      return {
+        era: LEAGUE.era,
+        whip: LEAGUE.whip,
+        k9: LEAGUE.k9,
+        bb9: LEAGUE.bb9,
+        hr9: LEAGUE.hr9,
+        games: 0,
+        source: 'fallback'
+      };
+    }
+  }
+
+  function normalizeScheduleGame(rawGame) {
+    const awayTeam = rawGame?.teams?.away?.team || {};
+    const homeTeam = rawGame?.teams?.home?.team || {};
+    const awayPitcher = rawGame?.teams?.away?.probablePitcher || null;
+    const homePitcher = rawGame?.teams?.home?.probablePitcher || null;
+
+    return {
+      gamePk: rawGame.gamePk,
+      status: rawGame?.status?.detailedState || rawGame?.status?.abstractGameState || 'Preview',
+      startTime: rawGame.gameDate || '',
+      venue: rawGame?.venue?.name || 'Venue TBD',
+      away: {
+        id: awayTeam.id,
+        name: awayTeam.name || 'Away Team',
+        abbrev: teamAbbrev(awayTeam),
+        score: rawGame?.teams?.away?.score ?? null,
+        starter: awayPitcher ? { id: awayPitcher.id, name: awayPitcher.fullName || awayPitcher.name } : { id: null, name: 'Starter TBD' }
+      },
+      home: {
+        id: homeTeam.id,
+        name: homeTeam.name || 'Home Team',
+        abbrev: teamAbbrev(homeTeam),
+        score: rawGame?.teams?.home?.score ?? null,
+        starter: homePitcher ? { id: homePitcher.id, name: homePitcher.fullName || homePitcher.name } : { id: null, name: 'Starter TBD' }
+      }
+    };
+  }
+
+  function timeBucket(game) {
+    const status = String(game.status || '').toLowerCase();
+    if (/final|completed|game over/.test(status)) return 'FINAL';
+    if (/live|progress|inning|warmup|delayed|suspended|review/.test(status)) return 'LIVE';
+    const ms = Date.parse(game.startTime || '');
+    if (!Number.isFinite(ms)) return 'TBD';
+    return ms >= Date.now() ? 'UPCOMING' : 'FINAL';
+  }
+
+  function lineupThreat(hitting = {}) {
+    return clamp(
+      50
+      + ((numberFrom(hitting.ops, LEAGUE.ops) - LEAGUE.ops) * 190)
+      + ((numberFrom(hitting.obp, LEAGUE.obp) - LEAGUE.obp) * 170)
+      + ((numberFrom(hitting.slg, LEAGUE.slg) - LEAGUE.slg) * 90)
+      + ((numberFrom(hitting.runsPerGame, LEAGUE.runsPerGame) - LEAGUE.runsPerGame) * 8),
+      20,
+      90
+    );
+  }
+
+  function pitcherQuality(pitcher = {}) {
+    if (pitcher.source !== 'live') return 50;
+    return clamp(
+      50
+      + ((LEAGUE.era - numberFrom(pitcher.era, LEAGUE.era)) * 8)
+      + ((LEAGUE.whip - numberFrom(pitcher.whip, LEAGUE.whip)) * 26)
+      + ((numberFrom(pitcher.k9, LEAGUE.k9) - LEAGUE.k9) * 3)
+      - ((numberFrom(pitcher.bb9, LEAGUE.bb9) - LEAGUE.bb9) * 4)
+      - ((numberFrom(pitcher.hr9, LEAGUE.hr9) - LEAGUE.hr9) * 6),
+      10,
+      95
+    );
+  }
+
+  function staffQuality(pitching = {}) {
+    return clamp(
+      50
+      + ((LEAGUE.era - numberFrom(pitching.era, LEAGUE.era)) * 6)
+      + ((LEAGUE.whip - numberFrom(pitching.whip, LEAGUE.whip)) * 18),
+      20,
+      85
+    );
+  }
+
+  function projectedRunsFor(lineupScore, opponentStarterScore, opponentStaffScore) {
+    return clamp(
+      LEAGUE.runsPerGame
+      + ((lineupScore - 50) * 0.052)
+      - ((opponentStarterScore - 50) * 0.046)
+      - ((opponentStaffScore - 50) * 0.021),
+      2.1,
+      7.8
+    );
+  }
+
+  function gradeFromConfidence(score) {
+    if (score >= 86) return 'A+';
+    if (score >= 80) return 'A';
+    if (score >= 75) return 'A-';
+    if (score >= 70) return 'B+';
+    if (score >= 64) return 'B';
+    if (score >= 58) return 'B-';
+    if (score >= 53) return 'C+';
+    return 'C';
+  }
+
+  function gradeValue(grade) {
+    return GRADE_ORDER[String(grade || '').toUpperCase()] || 0;
+  }
+
+  function analyzeGame(game) {
+    const awayLineup = lineupThreat(game.away.hittingStats);
+    const homeLineup = lineupThreat(game.home.hittingStats);
+    const awayStarter = pitcherQuality(game.away.starter.seasonStats);
+    const homeStarter = pitcherQuality(game.home.starter.seasonStats);
+    const awayStaff = staffQuality(game.away.pitchingStats);
+    const homeStaff = staffQuality(game.home.pitchingStats);
+
+    const awayStarterVsHomeLineup = awayStarter - homeLineup;
+    const homeStarterVsAwayLineup = homeStarter - awayLineup;
+
+    const awayRuns = projectedRunsFor(awayLineup, homeStarter, homeStaff);
+    const homeRuns = projectedRunsFor(homeLineup, awayStarter, awayStaff);
+
+    const awayScore =
+      (awayRuns * 12)
+      + (awayStarterVsHomeLineup * 0.55)
+      + (awayStaff * 0.16);
+
+    const homeScore =
+      (homeRuns * 12)
+      + (homeStarterVsAwayLineup * 0.55)
+      + (homeStaff * 0.16)
+      + 1.35;
+
+    const favoriteSide = homeScore >= awayScore ? 'home' : 'away';
+    const favorite = game[favoriteSide];
+    const underdog = favoriteSide === 'home' ? game.away : game.home;
+    const scoreDiff = Math.abs(homeScore - awayScore);
+    const runEdge = favoriteSide === 'home' ? homeRuns - awayRuns : awayRuns - homeRuns;
+    const confidencePercent = Math.round(clamp(50 + (scoreDiff * 2.05) + (Math.abs(runEdge) * 7.5), 51, 88));
+    const grade = gradeFromConfidence(confidencePercent);
+
+    const betterPitcherSide = homeStarter >= awayStarter ? 'home' : 'away';
+    const betterPitcherTeam = game[betterPitcherSide];
+    const betterPitcherName = betterPitcherTeam.starter.name;
+
+    const matchupReason =
+      favoriteSide === 'home'
+        ? `${game.home.abbrev} projects better because its lineup grades ${round(homeLineup)} and the ${game.away.abbrev} starter-vs-lineup score is ${round(awayStarterVsHomeLineup)}.`
+        : `${game.away.abbrev} projects better because its lineup grades ${round(awayLineup)} and the ${game.home.abbrev} starter-vs-lineup score is ${round(homeStarterVsAwayLineup)}.`;
+
+    const pitcherReason =
+      betterPitcherSide === favoriteSide
+        ? `The model agrees with ${betterPitcherName} as the better starter in this matchup.`
+        : `The model likes ${favorite.abbrev} even though ${betterPitcherName} grades as the better starter, because lineup/run projection offsets the pitcher edge.`;
+
+    return {
+      ...game,
+      model: {
+        awayLineupThreat: round(awayLineup),
+        homeLineupThreat: round(homeLineup),
+        awayStarterQuality: round(awayStarter),
+        homeStarterQuality: round(homeStarter),
+        awayStaffQuality: round(awayStaff),
+        homeStaffQuality: round(homeStaff),
+        awayProjectedRuns: round(awayRuns),
+        homeProjectedRuns: round(homeRuns),
+        awayStarterVsHomeLineup: round(awayStarterVsHomeLineup),
+        homeStarterVsAwayLineup: round(homeStarterVsAwayLineup),
+        awayScore: round(awayScore),
+        homeScore: round(homeScore)
+      },
+      prediction: {
+        predictedWinner: favorite.name,
+        predictedWinnerAbbrev: favorite.abbrev,
+        predictedSide: favoriteSide,
+        confidencePercent,
+        grade,
+        runEdge: round(runEdge),
+        scoreDiff: round(scoreDiff),
+        betterPitcher: {
+          side: betterPitcherSide,
+          team: betterPitcherTeam.name,
+          teamAbbrev: betterPitcherTeam.abbrev,
+          name: betterPitcherName,
+          qualityScore: round(betterPitcherSide === 'home' ? homeStarter : awayStarter)
+        },
+        pitcherVsLineup: {
+          awayStarterVsHomeLineup: {
+            pitcher: game.away.starter.name,
+            pitcherTeam: game.away.abbrev,
+            opponentLineup: game.home.abbrev,
+            pitcherQuality: round(awayStarter),
+            lineupThreat: round(homeLineup),
+            matchupAdvantage: round(awayStarterVsHomeLineup),
+            interpretation: awayStarterVsHomeLineup >= 0 ? 'pitcher grades strong enough for opposing lineup' : 'opposing lineup grades stronger than pitcher'
+          },
+          homeStarterVsAwayLineup: {
+            pitcher: game.home.starter.name,
+            pitcherTeam: game.home.abbrev,
+            opponentLineup: game.away.abbrev,
+            pitcherQuality: round(homeStarter),
+            lineupThreat: round(awayLineup),
+            matchupAdvantage: round(homeStarterVsAwayLineup),
+            interpretation: homeStarterVsAwayLineup >= 0 ? 'pitcher grades strong enough for opposing lineup' : 'opposing lineup grades stronger than pitcher'
+          }
+        },
+        reasons: [
+          matchupReason,
+          pitcherReason,
+          `${favorite.abbrev} projected runs ${round(favoriteSide === 'home' ? homeRuns : awayRuns)} vs ${underdog.abbrev} ${round(favoriteSide === 'home' ? awayRuns : homeRuns)}.`,
+          `Confidence grade ${grade} at ${confidencePercent}%.`
+        ]
+      }
+    };
+  }
+
+  function compactGame(game) {
+    const startMs = Date.parse(game.startTime || '');
+    const minutesUntilStart = Number.isFinite(startMs) ? Math.round((startMs - Date.now()) / 60000) : null;
+
+    return {
+      gamePk: game.gamePk,
+      status: game.status,
+      timeBucket: timeBucket(game),
+      startTime: game.startTime,
+      minutesUntilStart,
+      matchup: `${game.away.abbrev} @ ${game.home.abbrev}`,
+      venue: game.venue,
+      away: {
+        name: game.away.name,
+        abbrev: game.away.abbrev,
+        score: game.away.score,
+        starter: {
+          name: game.away.starter.name,
+          source: game.away.starter.seasonStats.source,
+          era: round(game.away.starter.seasonStats.era),
+          whip: round(game.away.starter.seasonStats.whip),
+          k9: round(game.away.starter.seasonStats.k9),
+          bb9: round(game.away.starter.seasonStats.bb9),
+          hr9: round(game.away.starter.seasonStats.hr9)
+        },
+        lineupProxy: {
+          source: game.away.hittingStats.source,
+          ops: round(game.away.hittingStats.ops, 3),
+          obp: round(game.away.hittingStats.obp, 3),
+          slg: round(game.away.hittingStats.slg, 3),
+          runsPerGame: round(game.away.hittingStats.runsPerGame)
+        },
+        model: {
+          lineupThreat: game.model.awayLineupThreat,
+          starterQuality: game.model.awayStarterQuality,
+          staffQuality: game.model.awayStaffQuality,
+          projectedRuns: game.model.awayProjectedRuns
+        }
+      },
+      home: {
+        name: game.home.name,
+        abbrev: game.home.abbrev,
+        score: game.home.score,
+        starter: {
+          name: game.home.starter.name,
+          source: game.home.starter.seasonStats.source,
+          era: round(game.home.starter.seasonStats.era),
+          whip: round(game.home.starter.seasonStats.whip),
+          k9: round(game.home.starter.seasonStats.k9),
+          bb9: round(game.home.starter.seasonStats.bb9),
+          hr9: round(game.home.starter.seasonStats.hr9)
+        },
+        lineupProxy: {
+          source: game.home.hittingStats.source,
+          ops: round(game.home.hittingStats.ops, 3),
+          obp: round(game.home.hittingStats.obp, 3),
+          slg: round(game.home.hittingStats.slg, 3),
+          runsPerGame: round(game.home.hittingStats.runsPerGame)
+        },
+        model: {
+          lineupThreat: game.model.homeLineupThreat,
+          starterQuality: game.model.homeStarterQuality,
+          staffQuality: game.model.homeStaffQuality,
+          projectedRuns: game.model.homeProjectedRuns
+        }
+      },
+      prediction: game.prediction
+    };
+  }
+
+  async function enrichGame(rawGame, season) {
+    const game = normalizeScheduleGame(rawGame);
+    const [awayTeamStats, homeTeamStats, awayStarterStats, homeStarterStats] = await Promise.all([
+      fetchTeamStats(game.away.id, season),
+      fetchTeamStats(game.home.id, season),
+      fetchPitcherStats(game.away.starter.id, season),
+      fetchPitcherStats(game.home.starter.id, season)
+    ]);
+
+    game.away.hittingStats = awayTeamStats.hitting;
+    game.away.pitchingStats = awayTeamStats.pitching;
+    game.home.hittingStats = homeTeamStats.hitting;
+    game.home.pitchingStats = homeTeamStats.pitching;
+    game.away.starter.seasonStats = awayStarterStats;
+    game.home.starter.seasonStats = homeStarterStats;
+
+    return analyzeGame(game);
+  }
+
+  async function buildFeed(date) {
+    const season = seasonFor(date);
+    const schedule = await fetchSchedule(date);
+    const analyzed = await Promise.all(schedule.map((game) => enrichGame(game, season)));
+
+    analyzed.sort((a, b) => {
+      const aMs = Date.parse(a.startTime || '');
+      const bMs = Date.parse(b.startTime || '');
+      return (Number.isFinite(aMs) ? aMs : Infinity) - (Number.isFinite(bMs) ? bMs : Infinity);
+    });
+
+    const picks = analyzed.map(compactGame);
+    const topPicks = picks
+      .filter((game) => gradeValue(game.prediction.grade) >= gradeValue('B'))
+      .sort((a, b) =>
+        b.prediction.confidencePercent - a.prediction.confidencePercent
+        || Math.abs(b.prediction.runEdge) - Math.abs(a.prediction.runEdge)
+      );
+
+    return {
+      schemaVersion: 2,
+      pageType: 'plain_json_only',
+      status: 'ok',
+      generatedAt: new Date().toISOString(),
+      date,
+      season,
+      count: picks.length,
+      topPickCount: topPicks.length,
+      source: 'Diamond Oracle ai.html browser JSON feed',
+      modelDescription: 'Probable starter quality is compared against opposing team hitting stats as a lineup-quality proxy. The pick blends starter-vs-lineup advantage, projected runs, team pitching baseline, and a small home-field edge.',
+      limitation: 'This static GitHub Pages version uses team hitting as the lineup proxy. It does not know confirmed batting orders unless that data appears in the public MLB schedule/stat feeds.',
+      readMe: 'For ChatGPT scheduled alerts, read this page after it finishes loading and parse the visible JSON.',
+      picks,
+      topPicks
+    };
+  }
+
+  async function main() {
+    const date = selectedDate();
+    try {
+      const feed = await buildFeed(date);
+      emit(feed);
+    } catch (error) {
+      emit({
+        schemaVersion: 2,
+        pageType: 'plain_json_only',
+        status: 'error',
+        generatedAt: new Date().toISOString(),
+        date,
+        source: 'Diamond Oracle ai.html browser JSON feed',
+        message: error?.message || String(error),
+        picks: []
+      });
+    }
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>
