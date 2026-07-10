@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": null,
+  "status": "flat_placeholder_until_manual_refresh",
+  "date": null,
+  "season": null,
+  "count": 0,
+  "usedLiveStats": false,
+  "message": "Flat-file mode. Run `node generate-picks.mjs` locally, then upload the updated picks.json to GitHub.",
+  "picks": [],
+  "topPicks": [],
+  "source": "Diamond Oracle flat GitHub Pages JSON feed"
+}
