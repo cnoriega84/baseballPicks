@@ -3,88 +3,88 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Diamond Oracle | Static Baseball Winner Model</title>
+  <meta name="theme-color" content="#152c98" />
+  <title>Diamond Oracle // MLB Winner Model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="ambient ambient-one"></div>
-  <div class="ambient ambient-two"></div>
-  <div class="ambient ambient-three"></div>
+  <div class="maze-backdrop" aria-hidden="true"></div>
 
   <div class="shell">
     <header class="hero">
-      <div>
-        <p class="eyebrow">Static GitHub Pages baseball model</p>
-        <h1>Diamond Oracle</h1>
-        <p class="subhead">Winner-first MLB cards powered by browser-side schedule, starter, team hitting, team pitching, projected runs, and confidence grading. No backend server required.</p>
+      <div class="hero-copy">
+        <p class="eyebrow">MLB WINNER MODEL // VERSION 2</p>
+        <h1>DIAMOND<br>ORACLE</h1>
+        <p class="subhead">A confirmed-lineup-aware baseball board that blends recent offense, probable-starter form, bullpen quality, projected runs, and honest data readiness. Letter grades are gone.</p>
       </div>
+
       <div class="status-card" aria-live="polite">
-        <span class="dot"></span>
+        <span class="pixel-dot"></span>
         <div>
-          <strong id="dataMode">Static mode ready</strong>
-          <small id="dataCount">Uses public MLB data directly in the browser.</small>
+          <strong id="dataMode">SYSTEM READY</strong>
+          <small id="dataCount">Waiting to scan the MLB board.</small>
         </div>
       </div>
     </header>
 
-    <section class="controls glass" aria-label="Board controls">
+    <section class="controls arcade-panel" aria-label="Board controls">
       <label>
-        Game date
+        GAME DATE
         <input id="dateInput" type="date" />
       </label>
 
       <label>
-        Sort board by
+        SORT BOARD
         <select id="sortSelect">
-          <option value="timeAsc">Game time · next up first</option>
-          <option value="gradeDesc">Letter grade · best picks first</option>
-          <option value="confidenceDesc">Confidence score</option>
+          <option value="timeAsc">Game time // next first</option>
+          <option value="probabilityDesc">Model win chance</option>
           <option value="runEdgeDesc">Projected run edge</option>
+          <option value="readinessDesc">Data readiness</option>
         </select>
       </label>
 
       <label>
-        Minimum grade
-        <select id="gradeFilter">
-          <option value="ALL">All grades</option>
-          <option value="A">A or better</option>
-          <option value="B+">B+ or better</option>
-          <option value="B">B or better</option>
-          <option value="C">C or better</option>
+        DATA STATE
+        <select id="readinessFilter">
+          <option value="ALL">All games</option>
+          <option value="READY">Ready // lineups confirmed</option>
+          <option value="WAIT">Waiting on data</option>
+          <option value="PICK">Model picks only</option>
+          <option value="PASS">Passes only</option>
         </select>
       </label>
 
       <label>
-        Time filter
+        GAME STATE
         <select id="timeFilter">
           <option value="ALL">All games</option>
-          <option value="UPCOMING">Upcoming only</option>
-          <option value="LIVE">Live / in progress</option>
-          <option value="FINAL">Final / completed</option>
-          <option value="TBD">Time TBD</option>
+          <option value="UPCOMING">Upcoming</option>
+          <option value="LIVE">Live</option>
+          <option value="FINAL">Final</option>
+          <option value="OFF">Postponed / cancelled</option>
         </select>
       </label>
 
-      <button id="loadBtn">Analyze board</button>
+      <button id="loadBtn" type="button">RUN SCAN</button>
     </section>
 
-
-    <section class="ai-feed glass" aria-label="AI readable picks feed">
+    <section class="ai-feed arcade-panel" aria-label="AI readable picks feed">
       <div>
-        <p class="eyebrow">AI-readable output</p>
-        <h2>Static picks feed</h2>
-        <p>Automation tools should read <a href="picks.json" id="jsonFeedLink">picks.json</a> instead of trying to scrape the visual cards after JavaScript renders.</p>
+        <p class="eyebrow">MACHINE OUTPUT</p>
+        <h2>LIVE JSON FEED</h2>
+        <p>Automation and analysis tools should read <a href="ai.html" id="jsonFeedLink">ai.html</a>. It runs the same version-two model and returns current browser-generated JSON.</p>
       </div>
       <div class="ai-actions">
-        <button id="copyJsonBtn" type="button">Copy loaded JSON</button>
+        <button id="copyJsonBtn" type="button">COPY JSON</button>
       </div>
       <details class="json-details">
-        <summary>Show browser-generated JSON</summary>
-        <pre id="aiReadableJson">{
-  "status": "waiting_for_board_to_load"
-}</pre>
+        <summary>SHOW LOADED JSON</summary>
+        <pre id="aiReadableJson">{"status":"waiting_for_scan"}</pre>
       </details>
-      <script id="diamondOracleData" type="application/json">{"status":"waiting_for_board_to_load"}</script>
+      <script id="diamondOracleData" type="application/json">{"status":"waiting_for_scan"}</script>
     </section>
 
     <main>
@@ -94,41 +94,46 @@
   </div>
 
   <template id="gameCardTemplate">
-    <article class="game-card glass">
-      <div class="card-glow"></div>
+    <article class="game-card arcade-panel">
+      <div class="scanline" aria-hidden="true"></div>
       <div class="game-top">
         <div>
           <div class="chip-row">
             <span class="tag game-status"></span>
-            <span class="tag tag-ghost game-time-chip"></span>
+            <span class="tag tag-yellow game-time-chip"></span>
+            <span class="tag tag-cream lineup-chip"></span>
           </div>
           <h2 class="matchup"></h2>
           <p class="venue"></p>
         </div>
-        <div class="confidence"></div>
+        <div class="model-state"></div>
       </div>
 
       <section class="winner-panel">
-        <div>
-          <span class="winner-label">Predicted winner</span>
+        <div class="winner-copy">
+          <span class="winner-label">MODEL WINNER</span>
           <h3 class="winner"></h3>
           <p class="primary-reason"></p>
         </div>
         <div class="win-prob">
           <span class="win-prob-value"></span>
-          <small>model win chance</small>
+          <small>WIN CHANCE</small>
           <div class="prob-track"><i></i></div>
+          <b class="decision"></b>
         </div>
       </section>
 
+      <div class="projected-score"></div>
+
       <div class="quick-factors">
+        <div class="factor lineup-factor"></div>
         <div class="factor pitcher-factor"></div>
-        <div class="factor run-factor"></div>
+        <div class="factor bullpen-factor"></div>
         <div class="factor form-factor"></div>
       </div>
 
       <details>
-        <summary>Why this pick?</summary>
+        <summary>OPEN MATCHUP DATA</summary>
         <div class="details-grid">
           <div>
             <h4 class="away-title"></h4>
@@ -143,6 +148,7 @@
     </article>
   </template>
 
+  <script src="oracle-core.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
