@@ -80,6 +80,7 @@ function getVisibleGames() {
       || (readinessFilter === 'READY' && readiness === 'READY')
       || (readinessFilter === 'WAIT' && String(readiness).startsWith('WAIT'))
       || (readinessFilter === 'PICK' && decision === 'PICK')
+      || (readinessFilter === 'LEAN' && decision === 'LEAN')
       || (readinessFilter === 'PASS' && decision === 'PASS');
     const timeMatch = timeFilter === 'ALL' || timeFilter === bucket;
     return readinessMatch && timeMatch;
@@ -202,8 +203,8 @@ function renderCard(game, index) {
 function publishAiReadableData() {
   const feed = Core.buildFeed(state.payload || {});
   const json = JSON.stringify(feed, null, 2);
-  window.DIAMOND_ORACLE_PICKS = feed;
-  $('#diamondOracleData').textContent = json;
+  window.PENNANT_PULSE_PICKS = feed;
+  $('#pennantPulseData').textContent = json;
   $('#aiReadableJson').textContent = json;
 }
 
@@ -227,7 +228,7 @@ function renderFilteredBoard() {
 }
 
 async function copyAiJson() {
-  const feed = window.DIAMOND_ORACLE_PICKS || Core.buildFeed(state.payload || {});
+  const feed = window.PENNANT_PULSE_PICKS || Core.buildFeed(state.payload || {});
   const json = JSON.stringify(feed, null, 2);
   const button = $('#copyJsonBtn');
   try {
