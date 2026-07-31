@@ -3,6 +3,6 @@
   "deprecated": true,
   "status": "use_live_browser_feed",
   "replacement": "ai.html",
-  "message": "picks.json is intentionally static. Use ai.html for the current Diamond Oracle version-two browser-generated feed.",
+  "message": "picks.json is intentionally static. Use ai.html for the current Pennant Pulse version-two browser-generated feed.",
   "picks": []
 }
