@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Diamond Oracle Live JSON</title>
+  <title>Pennant Pulse Live JSON</title>
   <style>
     body { margin: 0; padding: 18px; color: #f3ded3; background: #1f2174; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   </style>
 </head>
 <body>
-  <pre id="json">{"status":"loading","message":"Running Diamond Oracle version-two model..."}</pre>
+  <pre id="json">{"status":"loading","message":"Running Pennant Pulse version-two model..."}</pre>
   <script src="oracle-core.js"></script>
   <script>
     (async () => {
@@ -26,17 +26,17 @@
         const feed = window.DiamondOracleCore.buildFeed(payload);
         const json = JSON.stringify(feed, null, 2);
         output.textContent = json;
-        document.title = `Diamond Oracle JSON ${date}`;
+        document.title = `Pennant Pulse JSON ${date}`;
 
         const machineReadable = document.createElement('script');
-        machineReadable.id = 'diamondOracleData';
+        machineReadable.id = 'pennantPulseData';
         machineReadable.type = 'application/json';
         machineReadable.textContent = json;
         document.body.appendChild(machineReadable);
       } catch (error) {
         output.textContent = JSON.stringify({
           schemaVersion: 2,
-          modelVersion: 'oracle-browser-v2-lineup-recent-bullpen',
+          modelVersion: 'pennant-pulse-v2-lineup-recent-bullpen',
           status: 'error',
           date,
           message: error.message
