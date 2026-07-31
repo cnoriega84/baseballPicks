@@ -67,6 +67,30 @@ body::after {
 }
 
 .hero-copy { max-width: 1180px; }
+.brandline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.brandline .eyebrow { margin: 0; }
+.mlb-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  min-height: 44px;
+  padding: 5px 7px;
+  background: var(--blue-dark);
+  border: 3px solid var(--yellow);
+  box-shadow: 4px 4px 0 var(--orange-dark);
+}
+.mlb-mark img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .eyebrow {
   margin: 0 0 12px;
   color: var(--blue);
@@ -257,11 +281,14 @@ button:disabled { opacity: .62; cursor: wait; transform: none; }
   padding: 18px;
   overflow: hidden;
   background: var(--cream);
-  animation: pop-in .22s steps(3, end) both;
-  animation-delay: var(--reveal-delay, 0ms);
+  opacity: 1;
+  animation: none;
 }
 .game-card[data-decision="PICK"] { background: var(--yellow); }
-.game-card[data-decision="PASS"] { opacity: .84; }
+.game-card[data-decision="LEAN"] { background: #f6e3c3; }
+.game-card[data-decision="PASS"],
+.game-card[data-decision="WAIT"],
+.game-card[data-decision="OFF"] { background: var(--cream); opacity: 1; }
 .game-card:hover { transform: translate(-2px, -2px); box-shadow: 11px 11px 0 rgba(19, 21, 65, .38); }
 .scanline { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(180deg, transparent 0 4px, rgba(21,44,152,.025) 4px 5px); }
 .game-card > *:not(.scanline) { position: relative; }
@@ -325,6 +352,11 @@ button:disabled { opacity: .62; cursor: wait; transform: none; }
 .prob-track { height: 12px; margin: 10px 0; overflow: hidden; background: var(--cream); border: 2px solid var(--blue); }
 .prob-track i { display: block; width: 0; height: 100%; background: var(--orange-dark); }
 .decision { display: block; padding: 6px 4px; color: var(--cream); background: var(--blue-dark); font-size: .45rem; line-height: 1.4; }
+.game-card[data-decision="PICK"] .decision { background: var(--orange-dark); }
+.game-card[data-decision="LEAN"] .decision { background: #8a5a1f; }
+.game-card[data-decision="PASS"] .decision { background: #4f578e; }
+.game-card[data-decision="WAIT"] .decision,
+.game-card[data-decision="OFF"] .decision { background: #666; }
 
 .projected-score {
   padding: 10px 12px;
@@ -384,6 +416,7 @@ li { margin-bottom: 8px; color: var(--blue-dark); font-size: 1.02rem; line-heigh
 }
 
 @media (max-width: 480px) {
+  .mlb-mark { width: 62px; min-height: 38px; }
   h1 { font-size: 2.05rem; text-shadow: 5px 5px 0 var(--orange-dark), 8px 8px 0 rgba(31, 33, 116, .28); }
   .summary-grid { grid-template-columns: 1fr; }
   .game-card { padding: 13px; }
